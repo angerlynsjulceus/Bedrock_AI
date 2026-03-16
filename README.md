@@ -1,6 +1,6 @@
 # Bedrock AI Image Tagger Lab
 
-Automatically tags images using Amazon Bedrock (Claude 3 Sonnet) when uploaded to S3.
+Automatically tags images using Amazon Bedrock (Claude 3 Haiku) when uploaded to S3.
 
 ## Architecture Flow
 
@@ -25,8 +25,9 @@ Without this policy, Lambda would get an `AccessDeniedException` when calling Be
 This is the brain. The Python code (`lamdba_function.py`):
 1. Receives the S3 event (bucket name + file key)
 2. Downloads the image and base64-encodes it
-3. Sends it to Claude 3 Sonnet via Bedrock
+3. Sends it to Claude 3 Haiku via Bedrock
 4. Prints the 5 AI-generated tags to CloudWatch Logs
+5. Writes the 5 tags back to the S3 object as metadata tags
 
 It must be zipped before deployment — Terraform handles this with `archive_file`.
 
@@ -37,41 +38,63 @@ This is the **glue** between S3 and Lambda. Without it, uploading an image does 
 
 ## Deploy
 
-```bash
+> All commands below were run on **PowerShell**. The backslash `\` line continuation used in bash does not work in PowerShell, so all commands are written as a single line.
+
+```powershell
 terraform init
 terraform apply
 ```
 
 ## Verify Bedrock Model Access is Working
 
-### Option 1 — AWS Console
+### Console
 1. Go to **Amazon Bedrock** → **Model access** (left sidebar)
-2. Confirm `Claude 3 Sonnet` shows status **Access granted**
+2. Confirm `Claude 3 Haiku` shows status **Access granted**
 
-### Option 2 — AWS CLI
-```bash
-aws bedrock list-foundation-models --region us-east-1 --query "modelSummaries[?modelId=='anthropic.claude-3-5-sonnet-20240620-v1:0']"
+### AWS CLI
+```powershell
+aws bedrock list-foundation-models --region us-east-1 --query "modelSummaries[?modelId=='anthropic.claude-3-haiku-20240307-v1:0']"
 ```
 If it returns the model details, access is enabled.
 
-### Option 3 — Test the full pipeline end-to-end
-1. Upload a `.jpg` to your S3 bucket:
-```bash
-aws s3 cp my-photo.jpg s3://my-bedrock-image-tagger-bucket/
-```
-2. Go to **CloudWatch** → **Log groups** → `/aws/lambda/bedrock-image-tagger`
-3. Open the latest log stream — you should see a line like:
-```
-AI Tags for my-photo.jpg: 1. outdoor 2. sunset 3. landscape 4. nature 5. sky
-```
-If you see that output, everything is working end-to-end.
+## Where to Find the AI Tags
 
-### Option 4 — Quick Bedrock invoke test via CLI
-```bash
-aws bedrock-runtime invoke-model \
-  --model-id anthropic.claude-3-5-sonnet-20240620-v1:0 \
-  --body '{"anthropic_version":"bedrock-2023-05-31","max_tokens":10,"messages":[{"role":"user","content":"say hi"}]}' \
-  --cli-binary-format raw-in-base64-out \
-  output.json && cat output.json
+### CloudWatch Logs (printed by Lambda)
+1. Go to **CloudWatch** → **Log groups** → `/aws/lambda/bedrock-image-tagger`
+2. Click the latest log stream
+3. Look for a line like:
 ```
-A successful response confirms your model access is active.
+AI Tags for my-photo.jpg: ['outdoor', 'sunset', 'landscape', 'nature', 'sky']
+```
+
+#### PowerShell — View CloudWatch Tags
+```powershell
+# Step 1: Get the latest log stream name
+aws logs describe-log-streams --log-group-name /aws/lambda/bedrock-image-tagger --order-by LastEventTime --descending --query "logStreams[0].logStreamName" --output text
+```
+```powershell
+# Step 2: View the log events (replace LOG_STREAM_NAME with output from Step 1)
+aws logs get-log-events --log-group-name /aws/lambda/bedrock-image-tagger --log-stream-name 'LOG_STREAM_NAME' --query "events[*].message" --output text
+```
+
+### S3 Object Tags (written back by Lambda)
+1. Go to **S3** → your bucket → click the image
+2. Click the **Properties** tab
+3. Scroll down to **Tags** — you will see `tag1` through `tag5`
+
+#### PowerShell — View S3 Object Tags
+```powershell
+aws s3api get-object-tagging --bucket my-bedrock-image-tagger-bucket --key my-photo.jpg
+```
+Output will look like:
+```json
+{
+    "TagSet": [
+        { "Key": "tag1", "Value": "outdoor" },
+        { "Key": "tag2", "Value": "sunset" },
+        { "Key": "tag3", "Value": "landscape" },
+        { "Key": "tag4", "Value": "nature" },
+        { "Key": "tag5", "Value": "sky" }
+    ]
+}
+```

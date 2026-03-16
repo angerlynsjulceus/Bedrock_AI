@@ -1,0 +1,1 @@
+{"id":"msg_bdrk_01K3GJj19GGXHLHuFMqBaxeS","type":"message","role":"assistant","model":"claude-3-haiku-20240307","content":[{"type":"text","text":"Hi there!"}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":9,"output_tokens":6}}
