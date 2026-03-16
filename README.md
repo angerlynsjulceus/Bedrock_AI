@@ -1,51 +1,88 @@
-# Bedrock AI Image Tagger Lab
+# 📸 Bedrock AI Image Tagger
 
-Automatically tags images using Amazon Bedrock (Claude 3 Haiku) when uploaded to S3.
+### 📺 [Watch Me: Full Video Walkthrough & Demo](PASTE_YOUR_LOOM_LINK_HERE)
 
-## Architecture Flow
+An automated, serverless pipeline that uses **Amazon Bedrock (Claude 3 Haiku)** to analyze images uploaded to S3 and automatically apply descriptive metadata tags.
 
+## 🌟 Overview
+This project demonstrates a production-ready approach to image processing using **Infrastructure as Code (Terraform)**. Instead of manually tagging thousands of images, this pipeline leverages Generative AI to "see" the image and categorize it in real-time.
+
+## 🏗️ Architecture Flow
 ```
-Upload Image → S3 Bucket → S3 Notification → Lambda → Bedrock (Claude) → CloudWatch Logs
+Upload Image → S3 Bucket → S3 Notification → Lambda → Bedrock (Claude 3 Haiku) → CloudWatch Logs + S3 Tags
 ```
+1. **Upload:** User uploads a `.jpg` to the S3 Bucket
+2. **Trigger:** S3 detects the upload and triggers an AWS Lambda function
+3. **Analyze:** Lambda sends the image to Amazon Bedrock (Claude 3 Haiku)
+4. **Tag:** Bedrock returns 5 descriptive tags
+5. **Update:** Lambda writes the tags back to the S3 object metadata and logs them to CloudWatch
 
-## Why Each Resource is Needed
+## 🛠️ Tech Stack
+* **Cloud:** AWS (S3, Lambda, Bedrock, CloudWatch, IAM)
+* **IaC:** Terraform
+* **Language:** Python 3.12 (Boto3 SDK)
+* **AI Model:** Anthropic Claude 3 Haiku
+
+---
+
+## 🧩 Why Each Resource is Needed
 
 ### 1. S3 Bucket
 The entry point of the pipeline. You upload a `.jpg` image here, which kicks off the entire workflow. Without it, there is no trigger source.
 
 ### 2. IAM Role & Policy
 Lambda needs **permission** to talk to other AWS services. By default it can't do anything.
-- `bedrock:InvokeModel` — lets Lambda call Claude to analyze the image
-- `s3:GetObject` — lets Lambda download the image from the bucket
-- `logs:*` — lets Lambda write output to CloudWatch so you can see the tags
+* `bedrock:InvokeModel` — lets Lambda call Claude to analyze the image
+* `s3:GetObject` & `s3:PutObjectTagging` — lets Lambda download the image and write tags back
+* `logs:*` — lets Lambda write output to CloudWatch for observability
 
 Without this policy, Lambda would get an `AccessDeniedException` when calling Bedrock.
 
 ### 3. Lambda Function
-This is the brain. The Python code (`lamdba_function.py`):
+The brain of the operation. The Python code (`lamdba_function.py`):
 1. Receives the S3 event (bucket name + file key)
-2. Downloads the image and base64-encodes it
+2. Downloads the image and base64-encodes it for the AI
 3. Sends it to Claude 3 Haiku via Bedrock
 4. Prints the 5 AI-generated tags to CloudWatch Logs
 5. Writes the 5 tags back to the S3 object as metadata tags
 
-It must be zipped before deployment — Terraform handles this with `archive_file`.
+Terraform automatically zips the Python file using `archive_file` — no manual zipping needed.
 
 ### 4. S3 Bucket Notification
-This is the **glue** between S3 and Lambda. Without it, uploading an image does nothing. This resource tells S3: *"whenever a new object is created, invoke this Lambda function."*
+The **glue** between S3 and Lambda. Without it, uploading an image does nothing. This resource tells S3: *"whenever a new object is created, invoke this Lambda function."*
 
 `aws_lambda_permission` is also required — it grants S3 the right to invoke Lambda. Without it, S3 would be blocked even with the notification configured.
 
-## Deploy
+---
 
-> All commands below were run on **PowerShell**. The backslash `\` line continuation used in bash does not work in PowerShell, so all commands are written as a single line.
+## 🚀 Deployment & Execution (PowerShell)
+
+> **Note:** All commands below were run on **PowerShell**. The backslash `\` line continuation used in bash does not work in PowerShell, so all commands are written as a single line.
 
 ```powershell
+# Step 1: Initialize and Deploy
 terraform init
 terraform apply
 ```
 
-## Verify Bedrock Model Access is Working
+```powershell
+# Step 2: Upload an image to trigger the pipeline
+aws s3 cp C:\Users\YourName\Desktop\my-photo.jpg s3://my-bedrock-image-tagger-bucket/
+```
+
+```powershell
+# Check what is in your S3 bucket
+aws s3 ls s3://my-bedrock-image-tagger-bucket
+```
+
+```powershell
+# Empty your S3 bucket (required before terraform destroy)
+aws s3 rm s3://my-bedrock-image-tagger-bucket --recursive
+```
+
+---
+
+## ✅ Verify Bedrock Model Access is Working
 
 ### Console
 1. Go to **Amazon Bedrock** → **Model access** (left sidebar)
@@ -57,7 +94,9 @@ aws bedrock list-foundation-models --region us-east-1 --query "modelSummaries[?m
 ```
 If it returns the model details, access is enabled.
 
-## Where to Find the AI Tags
+---
+
+## 🏷️ Where to Find the AI Tags
 
 ### CloudWatch Logs (printed by Lambda)
 1. Go to **CloudWatch** → **Log groups** → `/aws/lambda/bedrock-image-tagger`
@@ -97,4 +136,18 @@ Output will look like:
         { "Key": "tag5", "Value": "sky" }
     ]
 }
+```
+
+---
+
+## 🧹 Cleanup
+To avoid unexpected charges, empty the bucket before destroying the infrastructure.
+
+```powershell
+# Step 1: Recursively delete all images in the bucket
+aws s3 rm s3://my-bedrock-image-tagger-bucket --recursive
+```
+```powershell
+# Step 2: Destroy the infrastructure
+terraform destroy -auto-approve
 ```
