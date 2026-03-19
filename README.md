@@ -1,6 +1,6 @@
 # 📸 Bedrock AI Image Tagger
 
-### 📺 [Watch Me: Full Video Walkthrough & Demo](PASTE_YOUR_LOOM_LINK_HERE)
+### 📺 [Watch Me: Full Video Walkthrough & Demo](https://www.loom.com/share/38f648dc7513447f8b8cd6c67df1652c)
 
 An automated, serverless pipeline that uses **Amazon Bedrock (Claude 3 Haiku)** to analyze images uploaded to S3 and automatically apply descriptive metadata tags.
 
